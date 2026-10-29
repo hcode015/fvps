@@ -1,6 +1,22 @@
 #!/usr/bin/env python3
 import os, re, io, json, time, uuid, zipfile, calendar, threading, urllib.request, urllib.error
 
+
+def _load_env():
+    p = os.path.join(os.path.dirname(os.path.abspath(__file__)), "env")
+    try:
+        with open(p) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, v = line.split("=", 1)
+                    os.environ.setdefault(k.strip(), v.strip())
+    except FileNotFoundError:
+        pass
+
+
+_load_env()
+
 TG = os.environ.get("TG_TOKEN", "").strip()
 PAT = os.environ.get("GH_PAT", "").strip()
 RDP = os.environ.get("RDP_PASSWORD", "").strip()
@@ -11,7 +27,7 @@ GHH = {"Authorization": "Bearer " + PAT,
        "Accept": "application/vnd.github+json",
        "X-GitHub-Api-Version": "2022-11-28",
        "User-Agent": "winbot"}
-OWNER_FILE = "/opt/winbot/owner"
+OWNER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "owner")
 KB = {"keyboard": [[{"text": "ساخت ویندوز جدید"}],
                    [{"text": "وضعیت"}, {"text": "توقف سرویس"}]],
       "resize_keyboard": True}
