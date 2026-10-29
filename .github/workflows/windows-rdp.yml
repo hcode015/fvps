@@ -11,9 +11,36 @@ jobs:
     steps:
       - name: 1. Enable Remote Desktop & Firewall
         run: |
+          $ErrorActionPreference = 'Stop'
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -Value 0
-          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 0
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "SecurityLayer" -Value 1
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "PortNumber" -Value 3389
+          sc.exe config TermService start= auto | Out-Host
+          sc.exe config UmRdpService start= auto | Out-Host
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop" -ErrorAction SilentlyContinue
+          netsh advfirewall firewall delete rule name="RDP-TCP-3389" | Out-Null
+          netsh advfirewall firewall add rule name="RDP-TCP-3389" dir=in action=allow protocol=TCP localport=3389 profile=any | Out-Host
+          Start-Service UmRdpService -ErrorAction SilentlyContinue
+          Restart-Service TermService -Force -ErrorAction SilentlyContinue
+          Start-Service TermService -ErrorAction SilentlyContinue
+          Get-Service TermService, UmRdpService | Format-Table Name, Status, StartType | Out-Host
+          $ok = $false
+          for ($i = 1; $i -le 15; $i++) {
+            if (Get-NetTCPConnection -LocalPort 3389 -State Listen -ErrorAction SilentlyContinue) {
+              $ok = $true
+              break
+            }
+            Start-Sleep -Seconds 2
+          }
+          Get-NetTCPConnection -LocalPort 3389 -State Listen -ErrorAction SilentlyContinue | Format-Table LocalAddress, LocalPort, State | Out-Host
+          if (-not $ok) {
+            Get-Service TermService -ErrorAction SilentlyContinue | Format-List Name, Status, StartType | Out-Host
+            Get-WinEvent -LogName System -MaxEvents 40 -ErrorAction SilentlyContinue |
+              Where-Object { $_.ProviderName -like '*TerminalServices*' -or $_.Message -like '*TermService*' -or $_.Message -like '*3389*' } |
+              Select-Object -First 6 TimeCreated, ProviderName, LevelDisplayName, Message | Format-List | Out-Host
+            throw "RDP port 3389 is not listening after TermService restart"
+          }
 
       - name: 2. Set Admin Password (fixed, from secret)
         env:
