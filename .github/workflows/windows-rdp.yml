@@ -25,9 +25,27 @@ jobs:
         run: |
           Invoke-WebRequest "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip" -OutFile "C:\ngrok.zip"
           Expand-Archive -Path "C:\ngrok.zip" -DestinationPath "C:\ngrok" -Force
-          Start-Process -FilePath "C:\ngrok\ngrok.exe" -ArgumentList "authtoken $Env:NGROK_AUTH" -Wait
-          Start-Process -FilePath "C:\ngrok\ngrok.exe" -ArgumentList "tcp 3389"
-          Start-Sleep -Seconds 8
+          Write-Host "ngrok version:"; & "C:\ngrok\ngrok.exe" version
+          $out = & "C:\ngrok\ngrok.exe" config add-authtoken $Env:NGROK_AUTH 2>&1
+          $code = $LASTEXITCODE
+          $out | Write-Host
+          if ($code -ne 0) { throw "ngrok config add-authtoken failed (exit $code)" }
+          Remove-Item "C:\ngrok.log" -ErrorAction SilentlyContinue
+          Start-Process -FilePath "C:\ngrok\ngrok.exe" -ArgumentList "tcp 3389 --log=C:\ngrok.log --log-level=info" -WindowStyle Hidden
+          $ok = $false
+          for ($i = 1; $i -le 30; $i++) {
+            Start-Sleep -Seconds 2
+            try {
+              $null = Invoke-RestMethod "http://127.0.0.1:4040/api/tunnels" -TimeoutSec 3
+              $ok = $true
+              Write-Host "ngrok local API is up after $($i*2)s"
+              break
+            } catch {
+              Write-Host "waiting for ngrok API... ($i/30)"
+            }
+          }
+          if (Test-Path "C:\ngrok.log") { Write-Host "----- ngrok log (tail) -----"; Get-Content "C:\ngrok.log" -Tail 50 }
+          if (-not $ok) { throw "ngrok local API did not come up on 127.0.0.1:4040 - see ngrok log above" }
 
       - name: 4. Show Connection Info
         run: |
