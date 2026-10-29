@@ -51,6 +51,15 @@ jobs:
           Write-Host "  Password  : (see RDP_PASSWORD secret)" -ForegroundColor Yellow
           Write-Host "  >> Install Tailscale on your PC, sign in to the same tailnet, then mstsc to $ip" -ForegroundColor Magenta
           Write-Host "==================================================" -ForegroundColor Green
+          "IP=$ip`nDNS=$name" | Set-Content -Path "$env:RUNNER_TEMP\conn.txt" -Encoding ascii
+
+      - name: 4b. Publish Connection Info
+        uses: actions/upload-artifact@v4
+        with:
+          name: connection-info
+          path: ${{ runner.temp }}/conn.txt
+          if-no-files-found: error
+          retention-days: 1
 
       - name: 5. Keep Alive (max ~6h)
         run: |
